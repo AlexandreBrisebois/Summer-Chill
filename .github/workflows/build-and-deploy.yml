@@ -7,10 +7,8 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY_NAME: ${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }}
   IMAGE_NAME: summer-chill
-  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-
+  
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -43,12 +41,12 @@ jobs:
     
     - name: Login to Azure Container Registry
       run: |
-        az acr login --name ${{ env.REGISTRY_NAME }}
+        az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }}
     
     - name: Build and push Docker image
       run: |
         # Get the ACR login server
-        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "loginServer" --output tsv)
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --query "loginServer" --output tsv)
         
         # Build the Docker image
         docker build -t $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.run_id }} .
@@ -60,7 +58,7 @@ jobs:
     
     - name: Output deployment information
       run: |
-        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "loginServer" --output tsv)
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --query "loginServer" --output tsv)
         echo "Container Registry: $ACR_LOGIN_SERVER"
         echo "Image: $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.run_id }}"
         echo "Latest Image: $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:latest"
