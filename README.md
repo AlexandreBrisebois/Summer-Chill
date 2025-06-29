@@ -2,7 +2,7 @@
 
 A .NET Worker Service application to control Fujitsu General air conditioner louver position via the FGLair API. The service runs continuously in the background, monitoring and adjusting the louver position at configurable intervals.
 
-## Architecture
+## Architecture 
 
 This is a .NET 9 Worker Service that:
 - Uses `BackgroundService` for continuous operation
