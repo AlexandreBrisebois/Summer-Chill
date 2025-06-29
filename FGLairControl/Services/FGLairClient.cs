@@ -1,0 +1,246 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using FGLairControl.Services.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace FGLairControl.Services;
+
+/// <summary>
+/// Simple implementation of the FGLair API client based on REST API calls
+/// </summary>
+public class FGLairClient : IFGLairClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<FGLairClient> _logger;
+    private readonly FGLairSettings _settings;
+    private string _accessToken = string.Empty;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    // API endpoint constants based on rest.http examples
+    private const string LoginEndpoint = "/users/sign_in.json";
+    private const string DevicePropertiesEndpoint = "/apiv1/dsns/{0}/properties";
+    private const string SetPropertyEndpoint = "/apiv1/dsns/{0}/properties/{1}/datapoints";
+    
+    public FGLairClient(
+        HttpClient httpClient,
+        IOptions<FGLairSettings> settings,
+        ILogger<FGLairClient> logger)
+    {
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+        
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+
+        // Configure HttpClient based on rest.http examples
+        _httpClient.BaseAddress = new Uri(FGLairSettings.BaseUrl);
+        _httpClient.DefaultRequestHeaders.Accept.Clear();
+        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _httpClient.DefaultRequestHeaders.UserAgent.Clear();
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("FGLAir", "2.0"));
+        _httpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+        _httpClient.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate, br");
+    }
+
+    /// <inheritdoc />
+    public async Task LoginAsync(CancellationToken cancellationToken = default)
+    {
+        // Skip login if we already have a token
+        if (!string.IsNullOrEmpty(_accessToken))
+        {
+            _logger.LogDebug("Using existing access token");
+            return;
+        }
+
+        _logger.LogInformation("Logging into FGLair API with username {Username}", _settings.Username);
+
+        // Create login request exactly as shown in rest.http
+        var loginRequest = new
+        {
+            user = new
+            {
+                email = _settings.Username,
+                password = _settings.Password,
+                application = new
+                {
+                    app_id = FGLairSettings.AppId,
+                    app_secret = FGLairSettings.AppSecret
+                }
+            }
+        };
+
+        var response = await _httpClient.PostAsJsonAsync(LoginEndpoint, loginRequest, _jsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+        
+        if (doc.RootElement.TryGetProperty("access_token", out var tokenElement))
+        {
+            _accessToken = tokenElement.GetString() ?? throw new InvalidOperationException("No access token in response");
+            
+            // Set authorization header for future requests
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("auth_token", _accessToken);
+            
+            _logger.LogInformation("Login successful");
+        }
+        else
+        {
+            throw new InvalidOperationException("Authentication failed - no access token received");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<DeviceInfo>> GetDevicesAsync(CancellationToken cancellationToken = default)
+    {
+        await LoginAsync(cancellationToken);
+        
+        _logger.LogInformation("Getting device properties for DSN: {DeviceDsn}", _settings.DeviceDsn);
+        
+        // Return the configured device as we're targeting a specific DSN
+        return new List<DeviceInfo>
+        {
+            new DeviceInfo 
+            { 
+                Dsn = _settings.DeviceDsn, 
+                Name = "AC", 
+                Model = "FGLair Device" 
+            }
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task SendLouverCommandAsync(CancellationToken cancellationToken = default)
+    {
+        await LoginAsync(cancellationToken);
+
+        if (string.IsNullOrEmpty(_settings.DeviceDsn))
+        {
+            throw new InvalidOperationException("Device DSN must be configured");
+        }
+
+        if (string.IsNullOrEmpty(_settings.LouverPosition))
+        {
+            throw new InvalidOperationException("Louver position must be configured");
+        }
+
+        _logger.LogInformation("Setting vertical louver direction to {Position} for device {DeviceDsn}", 
+            _settings.LouverPosition, _settings.DeviceDsn);
+
+        // Send command exactly as shown in rest.http
+        var endpoint = string.Format(SetPropertyEndpoint, _settings.DeviceDsn, "af_vertical_direction");
+        var request = new
+        {
+            datapoint = new
+            {
+                value = _settings.LouverPosition
+            }
+        };
+
+        var response = await _httpClient.PostAsJsonAsync(endpoint, request, _jsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        _logger.LogInformation("Louver command sent successfully");
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GetLouverPositionAsync(CancellationToken cancellationToken = default)
+    {
+        await LoginAsync(cancellationToken);
+
+        if (string.IsNullOrEmpty(_settings.DeviceDsn))
+        {
+            throw new InvalidOperationException("Device DSN must be configured");
+        }
+
+        // Get device properties exactly as shown in rest.http
+        var endpoint = string.Format(DevicePropertiesEndpoint, _settings.DeviceDsn);
+        var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+
+        // Parse the properties array to find af_vertical_direction
+        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var propertyElement in doc.RootElement.EnumerateArray())
+            {
+                if (propertyElement.TryGetProperty("property", out var propObj) &&
+                    propObj.TryGetProperty("name", out var nameElement) &&
+                    nameElement.GetString() == "af_vertical_direction" &&
+                    propObj.TryGetProperty("value", out var valueElement))
+                {
+                    var value = valueElement.ValueKind switch
+                    {
+                        JsonValueKind.String => valueElement.GetString() ?? "0",
+                        JsonValueKind.Number => valueElement.GetInt32().ToString(),
+                        _ => "0"
+                    };
+                    
+                    _logger.LogInformation("Current vertical louver direction: {Value}", value);
+                    return value;
+                }
+            }
+        }
+
+        _logger.LogWarning("af_vertical_direction property not found");
+        return "0"; // Default to auto
+    }
+
+    /// <inheritdoc />
+    public async Task<IEnumerable<DeviceProperty>> GetAllDevicePropertiesAsync(CancellationToken cancellationToken = default)
+    {
+        await LoginAsync(cancellationToken);
+
+        if (string.IsNullOrEmpty(_settings.DeviceDsn))
+        {
+            throw new InvalidOperationException("Device DSN must be configured");
+        }
+
+        var endpoint = string.Format(DevicePropertiesEndpoint, _settings.DeviceDsn);
+        var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+
+        var properties = new List<DeviceProperty>();
+
+        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var propertyElement in doc.RootElement.EnumerateArray())
+            {
+                if (propertyElement.TryGetProperty("property", out var propObj) &&
+                    propObj.TryGetProperty("name", out var nameElement))
+                {
+                    var name = nameElement.GetString() ?? "";
+                    var value = "";
+
+                    if (propObj.TryGetProperty("value", out var valueElement))
+                    {
+                        value = valueElement.ValueKind switch
+                        {
+                            JsonValueKind.String => valueElement.GetString() ?? "",
+                            JsonValueKind.Number => valueElement.GetInt32().ToString(),
+                            JsonValueKind.True => "1",
+                            JsonValueKind.False => "0",
+                            _ => ""
+                        };
+                    }
+
+                    properties.Add(new DeviceProperty { Name = name, Value = value });
+                }
+            }
+        }
+
+        _logger.LogInformation("Retrieved {Count} device properties", properties.Count);
+        return properties;
+    }
+}

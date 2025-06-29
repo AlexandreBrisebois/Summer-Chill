@@ -1,0 +1,14 @@
+version: '3.4'
+
+services:
+  fglaircontrol:
+    image: fglaircontrol
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - FGLair__Username=your-email@example.com
+      - FGLair__Password=your-password
+      - FGLair__DeviceDsn=device-dsn
+      - FGLair__LouverPosition=8
+      - FGLair__CommandIntervalMinutes=30
