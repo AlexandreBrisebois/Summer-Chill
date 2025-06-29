@@ -1,0 +1,66 @@
+name: github-actions-summer-chill
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY_NAME: ${{ secrets.AZURE_CONTAINER_REGISTRY_NAME }}
+  IMAGE_NAME: summer-chill
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Azure Login with OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Build .NET application
+      run: |
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+    
+    - name: Login to Azure Container Registry
+      run: |
+        az acr login --name ${{ env.REGISTRY_NAME }}
+    
+    - name: Build and push Docker image
+      run: |
+        # Get the ACR login server
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "loginServer" --output tsv)
+        
+        # Build the Docker image
+        docker build -t $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.run_id }} .
+        docker build -t $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:latest .
+        
+        # Push the Docker image
+        docker push $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.run_id }}
+        docker push $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:latest
+    
+    - name: Output deployment information
+      run: |
+        ACR_LOGIN_SERVER=$(az acr show --name ${{ env.REGISTRY_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "loginServer" --output tsv)
+        echo "Container Registry: $ACR_LOGIN_SERVER"
+        echo "Image: $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.run_id }}"
+        echo "Latest Image: $ACR_LOGIN_SERVER/${{ env.IMAGE_NAME }}:latest"
