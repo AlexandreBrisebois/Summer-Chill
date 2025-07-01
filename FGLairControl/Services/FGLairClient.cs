@@ -116,7 +116,7 @@ public class FGLairClient : IFGLairClient
     }
 
     /// <inheritdoc />
-    public async Task SendLouverCommandAsync(CancellationToken cancellationToken = default)
+    public async Task SendLouverCommandAsync(string position, CancellationToken cancellationToken = default)
     {
         await LoginAsync(cancellationToken);
 
@@ -125,13 +125,13 @@ public class FGLairClient : IFGLairClient
             throw new InvalidOperationException("Device DSN must be configured");
         }
 
-        if (string.IsNullOrEmpty(_settings.LouverPosition))
+        if (string.IsNullOrEmpty(position))
         {
-            throw new InvalidOperationException("Louver position must be configured");
+            throw new InvalidOperationException("Louver position must be provided");
         }
 
         _logger.LogInformation("Setting vertical louver direction to {Position} for device {DeviceDsn}", 
-            _settings.LouverPosition, _settings.DeviceDsn);
+            position, _settings.DeviceDsn);
 
         // Send command exactly as shown in rest.http
         var endpoint = string.Format(SetPropertyEndpoint, _settings.DeviceDsn, "af_vertical_direction");
@@ -139,7 +139,7 @@ public class FGLairClient : IFGLairClient
         {
             datapoint = new
             {
-                value = _settings.LouverPosition
+                value = position
             }
         };
 

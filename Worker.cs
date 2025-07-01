@@ -1,5 +1,4 @@
 using FGLairControl.Services;
-using Microsoft.Extensions.Options;
 
 namespace FGLairControl;
 
@@ -7,21 +6,23 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
-    private readonly FGLairSettings _settings;
+
+    // Use a list of positions for flexibility
+    private readonly List<string> _louverPositions = new() { "7", "8" };
+    private int _currentPositionIndex = 0;
 
     public Worker(
         ILogger<Worker> logger,
-        IFGLairClient fgLairClient,
-        IOptions<FGLairSettings> settings)
+        IFGLairClient fgLairClient)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
-        _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FGLair Control Worker started at: {time}", DateTimeOffset.Now);
+        _logger.LogInformation("Louver will cycle between positions 7 and 8 every 20 minutes");
 
         try
         {
@@ -32,10 +33,10 @@ public class Worker : BackgroundService
             // Check current louver position
             await CheckCurrentLouverPositionAsync(stoppingToken);
 
-            // Send initial louver command
-            await SendLouverCommandAsync(stoppingToken);
+            // Send initial louver command (start with position 7)
+            await SendCyclingLouverCommandAsync(stoppingToken);
 
-            // Setup periodic command sending
+            // Setup periodic command sending every 20 minutes
             await RunPeriodicCommandsAsync(stoppingToken);
         }
         catch (Exception ex)
@@ -64,31 +65,35 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task SendLouverCommandAsync(CancellationToken cancellationToken)
+    private async Task SendCyclingLouverCommandAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await _fgLairClient.SendLouverCommandAsync(cancellationToken);
+            var currentPosition = _louverPositions[_currentPositionIndex];
+            await _fgLairClient.SendLouverCommandAsync(currentPosition, cancellationToken);
             
-            var targetDescription = GetPositionDescription(_settings.LouverPosition);
-            _logger.LogInformation("Louver command sent. Target position: {Position} ({Description})", 
-                _settings.LouverPosition, targetDescription);
+            var targetDescription = GetPositionDescription(currentPosition);
+            _logger.LogInformation("Cycling louver command sent. Position: {Position} ({Description})", 
+                currentPosition, targetDescription);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Louver Command Sent: {_settings.LouverPosition} ({targetDescription})");
+            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Cycling Louver Command Sent: {currentPosition} ({targetDescription})");
             Console.ResetColor();
+
+            // Move to next position for the next cycle
+            _currentPositionIndex = (_currentPositionIndex + 1) % _louverPositions.Count;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send louver command");
+            _logger.LogError(ex, "Failed to send cycling louver command");
         }
     }
 
     private async Task RunPeriodicCommandsAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_settings.CommandIntervalMinutes));
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(20)); // Fixed 20-minute interval for cycling
         
-        _logger.LogInformation("Starting periodic commands every {Interval} minutes", _settings.CommandIntervalMinutes);
+        _logger.LogInformation("Starting periodic louver cycling every 20 minutes between positions 7 and 8");
         
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -97,12 +102,12 @@ public class Worker : BackgroundService
                 // Check current position
                 await CheckCurrentLouverPositionAsync(stoppingToken);
                 
-                // Send command
-                await SendLouverCommandAsync(stoppingToken);
+                // Send cycling command
+                await SendCyclingLouverCommandAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during periodic command execution");
+                _logger.LogError(ex, "Error during periodic louver cycling execution");
             }
         }
     }
@@ -116,8 +121,8 @@ public class Worker : BackgroundService
         "4" => "Position 4",
         "5" => "Position 5 (lowest/down)",
         "6" => "Position 6",
-        "7" => "Position 7",
-        "8" => "Position 8",
+        "7" => "Position 7 (cycling position A)",
+        "8" => "Position 8 (cycling position B)",
         _ => "Unknown Position"
     };
 

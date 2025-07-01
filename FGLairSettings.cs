@@ -34,14 +34,4 @@ public class FGLairSettings
     /// The DSN (Device Serial Number) of the air conditioner
     /// </summary>
     public string DeviceDsn { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The desired louver position (0=Auto, 1-8=Positions)
-    /// </summary>
-    public string LouverPosition { get; set; } = "8";
-
-    /// <summary>
-    /// Command interval in minutes
-    /// </summary>
-    public int CommandIntervalMinutes { get; set; } = 30;
 }
