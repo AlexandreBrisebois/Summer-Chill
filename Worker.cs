@@ -6,6 +6,7 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
+    private readonly int _intervalMinutes;
 
     // Use a list of positions for flexibility
     private readonly List<string> _louverPositions;
@@ -19,6 +20,9 @@ public class Worker : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
 
+        // Read interval from configuration
+        _intervalMinutes = configuration.GetSection("FGLair:Interval").Get<int?>() ?? 20;
+
         // Read louver positions from configuration (comma-separated string)
         var positions = configuration.GetSection("FGLair:LouverPositions").Get<string>() ?? "7,8";
         _louverPositions = positions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
@@ -29,7 +33,7 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FGLair Control Worker started at: {time}", DateTimeOffset.Now);
-        _logger.LogInformation("Louver will cycle between positions 7 and 8 every 20 minutes");
+        _logger.LogInformation("Louver will cycle between positions 7 and 8 every {Interval} minutes", _intervalMinutes);
 
         try
         {
@@ -98,9 +102,9 @@ public class Worker : BackgroundService
 
     private async Task RunPeriodicCommandsAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(20)); // Fixed 20-minute interval for cycling
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_intervalMinutes)); // Use configured interval
         
-        _logger.LogInformation("Starting periodic louver cycling every 20 minutes between positions 7 and 8");
+        _logger.LogInformation("Starting periodic louver cycling every {Interval} minutes between positions 7 and 8", _intervalMinutes);
         
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
