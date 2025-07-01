@@ -49,15 +49,17 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "Using tag from ref: $TAG_NAME"
         else
-          # Main branch push - find the most recent tag for this commit
-          TAG_NAME=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+          # Main branch push - find the most recent tag reachable from this commit
+          TAG_NAME=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
           if [ -z "$TAG_NAME" ]; then
-            echo "Error: No tag found for the current commit on main branch"
-            echo "Please ensure the commit has a version tag before merging to main"
-            exit 1
+            # If no tags exist, use a default versioning scheme
+            COMMIT_SHORT=$(git rev-parse --short HEAD)
+            TAG_NAME="main-${COMMIT_SHORT}"
+            echo "No tags found, using commit-based tag: $TAG_NAME"
+          else
+            echo "Using most recent tag reachable from HEAD: $TAG_NAME"
           fi
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "Using tag from commit: $TAG_NAME"
         fi
     
     - name: Set up Docker Buildx
