@@ -14,6 +14,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: docker-hub
+
     if: startsWith(github.ref, 'refs/tags/')  # Only run on tag pushes
     permissions:
       contents: read
@@ -57,6 +58,7 @@ jobs:
     - name: Build and push Docker image
       run: |
         # Build the Docker image with tag version
+
         docker build -t ${{ env.DOCKER_REPOSITORY }}:${{ steps.extract_tag.outputs.tag }} -t ${{ env.DOCKER_REPOSITORY }}:latest .
         
         # Push the Docker image
@@ -68,4 +70,5 @@ jobs:
         echo "Docker Hub Repository: ${{ env.DOCKER_REPOSITORY }}"
         echo "Tagged Image: ${{ env.DOCKER_REPOSITORY }}:${{ steps.extract_tag.outputs.tag }}"
         echo "Latest Image: ${{ env.DOCKER_REPOSITORY }}:latest"
+
         echo "Git Tag: ${{ steps.extract_tag.outputs.tag }}"
