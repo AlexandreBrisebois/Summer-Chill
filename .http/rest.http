@@ -1,5 +1,4 @@
-@device-dsn = "YOUR_DEVICE_DSN_HERE"
-@access-token = "SET VALUE AFTER AUTHENTICATION"
+@device-dsn = ""
 
 ### Authenticate against FGLair API
 POST https://user-field.aylanetworks.com/users/sign_in.json
@@ -11,8 +10,8 @@ Accept-Encoding: gzip, deflate, br
 
 {
   "user": {
-    "email": "---",
-    "password": "---",
+    "email": "",
+    "password": "",
     "application": {
       "app_id": "CJIOSP-id",
       "app_secret": "CJIOSP-Vb8MQL_lFiYQ7DKjN0eCFXznKZE"
@@ -20,8 +19,16 @@ Accept-Encoding: gzip, deflate, br
   }
 }
 
-### Response
-@access_token = "45da2ebe41544dee9161052aac407394"
+### Authentication Response
+@access_token = ""
+
+### Get Devices
+GET https://user-field.aylanetworks.com/apiv1/devices.json
+Accept: application/json
+User-Agent: FGLAir/2.0
+Authorization: auth_token {{access_token}}
+Connection: keep-alive
+Accept-Encoding: gzip, deflate, br
 
 ### Get Device Properties (including louver position)
 # After running the authentication request above:

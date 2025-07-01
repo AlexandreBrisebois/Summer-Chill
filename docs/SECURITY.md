@@ -1,53 +1,73 @@
-# Security Guide
+# Security
 
-This document outlines security best practices, considerations, and implementation details for the FGLair Control application.
-
-## Security Overview
-
-FGLair Control handles sensitive credentials and communicates with external APIs. This guide ensures secure deployment and operation.
-
-## Credential Management
-
-### ⚠️ Critical Security Rules
+## ⚠️ Critical Rules
 
 1. **Never commit credentials to version control**
 2. **Use environment variables in production**
-3. **Rotate credentials regularly**
-4. **Use least-privilege access**
-5. **Monitor for credential exposure**
+3. **Monitor for credential exposure**
 
-### Secure Configuration Methods
+## Secure Configuration
 
-#### ✅ Recommended: Environment Variables
+### Environment Variables (Recommended)
 ```bash
-# Linux/Mac
+# Production
 export FGLair__Username="user@example.com"
 export FGLair__Password="secure-password"
 export FGLair__DeviceDsn="DSXXXXXXXXXXXXXXXX"
-
-# Windows
-$env:FGLair__Username="user@example.com"
-$env:FGLair__Password="secure-password"
-$env:FGLair__DeviceDsn="DSXXXXXXXXXXXXXXXX"
 ```
 
-#### ✅ Recommended: Docker Secrets
+### Docker Secrets (Advanced)
 ```yaml
 # docker-compose.yml
 services:
   fglaircontrol:
-    image: fglaircontrol
     secrets:
       - fglair_username
       - fglair_password
-      - fglair_dsn
     environment:
       - FGLair__Username_FILE=/run/secrets/fglair_username
       - FGLair__Password_FILE=/run/secrets/fglair_password
-      - FGLair__DeviceDsn_FILE=/run/secrets/fglair_dsn
 
 secrets:
   fglair_username:
+    file: ./secrets/username.txt
+  fglair_password:
+    file: ./secrets/password.txt
+```
+
+## What NOT to Do
+
+❌ **Don't do this:**
+```json
+{
+  "FGLair": {
+    "Username": "myemail@gmail.com",
+    "Password": "mypassword123"
+  }
+}
+```
+
+✅ **Do this instead:**
+```bash
+export FGLair__Username="myemail@gmail.com"
+export FGLair__Password="mypassword123"
+```
+
+## Best Practices
+
+- **Rotate credentials** regularly
+- **Use strong passwords** with 2FA when available
+- **Monitor logs** for authentication failures
+- **Separate** dev/test/prod credentials
+- **Review** container logs for credential leaks
+
+## Incident Response
+
+If credentials are exposed:
+1. **Immediately** change FGLair password
+2. **Rotate** all related credentials
+3. **Review** commit history and logs
+4. **Update** documentation if needed
     file: ./secrets/username.txt
   fglair_password:
     file: ./secrets/password.txt
