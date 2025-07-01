@@ -33,7 +33,7 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FGLair Control Worker started at: {time}", DateTimeOffset.Now);
-        _logger.LogInformation("Louver will cycle between positions 7 and 8 every {Interval} minutes", _intervalMinutes);
+        _logger.LogInformation("Louver will cycle between positions {Positions} every {Interval} minutes", string.Join(", ", _louverPositions), _intervalMinutes);
 
         try
         {
