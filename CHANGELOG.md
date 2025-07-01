@@ -9,4 +9,3 @@ All notable changes to this project will be documented in this file.
 - Automatic louver position cycling
 - Docker support
 - Configuration templates
-

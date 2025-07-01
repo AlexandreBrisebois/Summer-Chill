@@ -1,11 +1,13 @@
 version: '3.4'
-
 services:
   summer-chill:
-    image: summer-chill
+    image: brisebois/summer-chill:v1.0.0
+    network_mode: host
     environment:
-      - FGLair__Username=your-email@example.com
-      - FGLair__Password=your-password
-      - FGLair__DeviceDsn=DSXXXXXXXXXXXXXXXX
+      - FGLair__Username=""
+      - FGLair__Password=""
+      - FGLair__DeviceId=""
+      - FGLair__DeviceDsn=
       - FGLair__LouverPositions=7,8
       - FGLair__Interval=20
+    restart: unless-stopped
