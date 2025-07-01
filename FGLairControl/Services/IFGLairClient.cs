@@ -22,11 +22,12 @@ public interface IFGLairClient
     Task<IEnumerable<DeviceInfo>> GetDevicesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a louver command to the FGLair air conditioner
+    /// Sends a louver command to the FGLair air conditioner with a specific position
     /// </summary>
+    /// <param name="position">The louver position to set (0=Auto, 1-8=Positions)</param>
     /// <param name="cancellationToken">Optional cancellation token</param>
     /// <returns>A task representing the asynchronous operation</returns>
-    Task SendLouverCommandAsync(CancellationToken cancellationToken = default);
+    Task SendLouverCommandAsync(string position, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the current louver position from the FGLair air conditioner
