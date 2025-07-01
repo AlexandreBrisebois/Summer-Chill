@@ -8,15 +8,22 @@ public class Worker : BackgroundService
     private readonly IFGLairClient _fgLairClient;
 
     // Use a list of positions for flexibility
-    private readonly List<string> _louverPositions = new() { "7", "8" };
+    private readonly List<string> _louverPositions;
     private int _currentPositionIndex = 0;
 
     public Worker(
         ILogger<Worker> logger,
-        IFGLairClient fgLairClient)
+        IFGLairClient fgLairClient,
+        IConfiguration configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
+
+        // Read louver positions from configuration (comma-separated string)
+        var positions = configuration.GetSection("FGLair:LouverPositions").Get<string>() ?? "7,8";
+        _louverPositions = positions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        if (_louverPositions.Count == 0)
+            throw new InvalidOperationException("No louver positions configured.");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
