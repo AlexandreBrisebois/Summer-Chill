@@ -104,7 +104,8 @@ public class Worker : BackgroundService
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_intervalMinutes)); // Use configured interval
         
-        _logger.LogInformation("Starting periodic louver cycling every {Interval} minutes between positions 7 and 8", _intervalMinutes);
+        _logger.LogInformation("Starting periodic louver cycling every {Interval} minutes between positions {PositionA} and {PositionB}", 
+            _intervalMinutes, _louverPositions[0], _louverPositions[1]);
         
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
