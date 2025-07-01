@@ -1,52 +1,64 @@
-# Contributing to FGLair Control
-
-Thank you for your interest in contributing to FGLair Control! This guide will help you get started with development and ensure your contributions align with the project standards.
+# Contributing
 
 ## Development Setup
 
-### Prerequisites
-- .NET 9 SDK
-- Docker Desktop (optional, for container testing)
-- Visual Studio 2022 or VS Code
-- Git
-
-### Initial Setup
 ```bash
-# Fork and clone the repository
+# Fork and clone
 git clone https://github.com/yourusername/Summer-Chill.git
 cd Summer-Chill
 
-# Create development configuration
+# Setup configuration
 cp appsettings.template.json appsettings.Development.json
+# Add your test credentials to appsettings.Development.json
 
-# Restore dependencies
+# Build and test
 dotnet restore
-
-# Build the project
 dotnet build
-
-# Run tests
 dotnet test
 ```
+
+## Making Changes
+
+1. Create a feature branch: `git checkout -b feature/your-feature`
+2. Make your changes
+3. Add tests for new functionality
+4. Ensure all tests pass: `dotnet test`
+5. Submit a pull request
+
+## Code Standards
+
+- Follow .NET coding conventions
+- Add XML documentation for public APIs
+- Include unit tests for new features
+- Use structured logging with `ILogger`
+- Handle exceptions appropriately
 
 ## Project Structure
 
 ```
-Summer-Chill/
-├── src/
-│   ├── FGLairControl/              # Main application
-│   │   ├── Program.cs              # Entry point
-│   │   ├── Worker.cs               # Background service
-│   │   ├── Services/               # Business logic
-│   │   └── Models/                 # Data models
-│   └── FGLairControl.Tests/        # Unit tests
-├── docs/                           # Documentation
-├── docker/                         # Docker configurations
-├── scripts/                        # Utility scripts
-└── templates/                      # Configuration templates
+├── Program.cs              # Entry point
+├── Worker.cs               # Main background service
+├── FGLairSettings.cs       # Configuration model
+├── Services/               # Business logic
+│   ├── IFGLairClient.cs    # API client interface
+│   ├── FGLairClient.cs     # HTTP client implementation
+│   └── DeviceInfo.cs       # Device management
+└── Models/                 # Data models
 ```
 
-## Coding Standards
+## Testing
+
+Run tests before submitting:
+```bash
+dotnet test --verbosity normal
+```
+
+## Pull Request Guidelines
+
+- Provide clear description of changes
+- Reference any related issues
+- Ensure CI passes
+- Update documentation if needed
 
 ### C# Guidelines
 - Follow [Microsoft C# Coding Conventions](https://docs.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions)
