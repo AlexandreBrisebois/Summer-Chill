@@ -57,8 +57,7 @@ jobs:
     - name: Build and push Docker image
       run: |
         # Build the Docker image with tag version
-        docker build -t ${{ env.DOCKER_REPOSITORY }}:${{ steps.extract_tag.outputs.tag }} .
-        docker build -t ${{ env.DOCKER_REPOSITORY }}:latest .
+        docker build -t ${{ env.DOCKER_REPOSITORY }}:${{ steps.extract_tag.outputs.tag }} -t ${{ env.DOCKER_REPOSITORY }}:latest .
         
         # Push the Docker image
         docker push ${{ env.DOCKER_REPOSITORY }}:${{ steps.extract_tag.outputs.tag }}
