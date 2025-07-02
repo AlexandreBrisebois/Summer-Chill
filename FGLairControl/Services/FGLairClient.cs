@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -16,10 +17,13 @@ public class FGLairClient : IFGLairClient
     private readonly ILogger<FGLairClient> _logger;
     private readonly FGLairSettings _settings;
     private string _accessToken = string.Empty;
+    private string _refreshToken = string.Empty;
+    private DateTime _tokenExpiryTime = DateTime.MinValue;
     private readonly JsonSerializerOptions _jsonOptions;
 
     // API endpoint constants based on rest.http examples
     private const string LoginEndpoint = "/users/sign_in.json";
+    private const string RefreshEndpoint = "/users/refresh_token.json";
     private const string DevicePropertiesEndpoint = "/apiv1/dsns/{0}/properties";
     private const string SetPropertyEndpoint = "/apiv1/dsns/{0}/properties/{1}/datapoints";
     
@@ -51,13 +55,32 @@ public class FGLairClient : IFGLairClient
     /// <inheritdoc />
     public async Task LoginAsync(CancellationToken cancellationToken = default)
     {
-        // Skip login if we already have a token
-        if (!string.IsNullOrEmpty(_accessToken))
+        // Check if current token is still valid (with 5 minute buffer)
+        if (!IsTokenExpiredOrExpiring())
         {
-            _logger.LogDebug("Using existing access token");
+            _logger.LogDebug("Using existing access token (expires at {ExpiryTime})", _tokenExpiryTime);
             return;
         }
 
+        // Try to refresh token if we have a refresh token
+        if (!string.IsNullOrEmpty(_refreshToken))
+        {
+            _logger.LogInformation("Access token expired or expiring soon, attempting to refresh");
+            if (await TryRefreshTokenAsync(cancellationToken))
+            {
+                return;
+            }
+            _logger.LogWarning("Token refresh failed, performing fresh login");
+        }
+
+        await PerformFreshLoginAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Performs a fresh login using username and password
+    /// </summary>
+    private async Task PerformFreshLoginAsync(CancellationToken cancellationToken)
+    {
         _logger.LogInformation("Logging into FGLair API with username {Username}", _settings.Username);
 
         // Create login request exactly as shown in rest.http
@@ -78,6 +101,49 @@ public class FGLairClient : IFGLairClient
         var response = await _httpClient.PostAsJsonAsync(LoginEndpoint, loginRequest, _jsonOptions, cancellationToken);
         response.EnsureSuccessStatusCode();
 
+        await ProcessAuthenticationResponseAsync(response, cancellationToken);
+        _logger.LogInformation("Fresh login successful");
+    }
+
+    /// <summary>
+    /// Attempts to refresh the access token using the refresh token
+    /// </summary>
+    private async Task<bool> TryRefreshTokenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var refreshRequest = new
+            {
+                user = new
+                {
+                    refresh_token = _refreshToken
+                }
+            };
+
+            var response = await _httpClient.PostAsJsonAsync(RefreshEndpoint, refreshRequest, _jsonOptions, cancellationToken);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Token refresh failed with status {StatusCode}", response.StatusCode);
+                return false;
+            }
+
+            await ProcessAuthenticationResponseAsync(response, cancellationToken);
+            _logger.LogInformation("Token refresh successful");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Exception during token refresh");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Processes authentication response and extracts tokens
+    /// </summary>
+    private async Task ProcessAuthenticationResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(responseContent);
         
@@ -85,15 +151,79 @@ public class FGLairClient : IFGLairClient
         {
             _accessToken = tokenElement.GetString() ?? throw new InvalidOperationException("No access token in response");
             
+            // Extract refresh token if present
+            if (doc.RootElement.TryGetProperty("refresh_token", out var refreshElement))
+            {
+                _refreshToken = refreshElement.GetString() ?? string.Empty;
+            }
+            
+            // Calculate expiry time (default to 1 hour if not specified)
+            var expiresInSeconds = 3600; // Default to 1 hour
+            if (doc.RootElement.TryGetProperty("expires_in", out var expiresElement) && 
+                expiresElement.TryGetInt32(out var expiry))
+            {
+                expiresInSeconds = expiry;
+            }
+            
+            _tokenExpiryTime = DateTime.UtcNow.AddSeconds(expiresInSeconds);
+            
             // Set authorization header for future requests
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("auth_token", _accessToken);
             
-            _logger.LogInformation("Login successful");
+            _logger.LogDebug("Token processed - expires at {ExpiryTime}", _tokenExpiryTime);
         }
         else
         {
             throw new InvalidOperationException("Authentication failed - no access token received");
         }
+    }
+
+    /// <summary>
+    /// Executes an HTTP request with automatic token refresh on 401 errors
+    /// </summary>
+    private async Task<HttpResponseMessage> ExecuteRequestWithRetryAsync(
+        Func<Task<HttpResponseMessage>> requestFunc, 
+        CancellationToken cancellationToken)
+    {
+        await LoginAsync(cancellationToken);
+        
+        var response = await requestFunc();
+        
+        // If we get a 401 Unauthorized, try to refresh token and retry once
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            _logger.LogWarning("Received 401 Unauthorized, clearing token and attempting fresh login");
+            
+            // Clear current tokens to force refresh
+            _accessToken = string.Empty;
+            _refreshToken = string.Empty;
+            _tokenExpiryTime = DateTime.MinValue;
+            
+            // Remove auth header to avoid using stale token
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+            
+            // Attempt fresh login
+            await LoginAsync(cancellationToken);
+            
+            // Retry the request
+            response.Dispose();
+            response = await requestFunc();
+            
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _logger.LogError("Request still returns 401 after token refresh - authentication may have failed");
+            }
+        }
+        
+        return response;
+    }
+
+    /// <summary>
+    /// Checks if the current token is expired or about to expire
+    /// </summary>
+    private bool IsTokenExpiredOrExpiring()
+    {
+        return string.IsNullOrEmpty(_accessToken) || _tokenExpiryTime <= DateTime.UtcNow.AddMinutes(5);
     }
 
     /// <inheritdoc />
@@ -118,8 +248,6 @@ public class FGLairClient : IFGLairClient
     /// <inheritdoc />
     public async Task SendLouverCommandAsync(string position, CancellationToken cancellationToken = default)
     {
-        await LoginAsync(cancellationToken);
-
         if (string.IsNullOrEmpty(_settings.DeviceDsn))
         {
             throw new InvalidOperationException("Device DSN must be configured");
@@ -143,7 +271,10 @@ public class FGLairClient : IFGLairClient
             }
         };
 
-        var response = await _httpClient.PostAsJsonAsync(endpoint, request, _jsonOptions, cancellationToken);
+        var response = await ExecuteRequestWithRetryAsync(
+            () => _httpClient.PostAsJsonAsync(endpoint, request, _jsonOptions, cancellationToken),
+            cancellationToken);
+        
         response.EnsureSuccessStatusCode();
 
         _logger.LogInformation("Louver command sent successfully");
@@ -152,8 +283,6 @@ public class FGLairClient : IFGLairClient
     /// <inheritdoc />
     public async Task<string> GetLouverPositionAsync(CancellationToken cancellationToken = default)
     {
-        await LoginAsync(cancellationToken);
-
         if (string.IsNullOrEmpty(_settings.DeviceDsn))
         {
             throw new InvalidOperationException("Device DSN must be configured");
@@ -161,7 +290,10 @@ public class FGLairClient : IFGLairClient
 
         // Get device properties exactly as shown in rest.http
         var endpoint = string.Format(DevicePropertiesEndpoint, _settings.DeviceDsn);
-        var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+        var response = await ExecuteRequestWithRetryAsync(
+            () => _httpClient.GetAsync(endpoint, cancellationToken),
+            cancellationToken);
+        
         response.EnsureSuccessStatusCode();
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -197,15 +329,16 @@ public class FGLairClient : IFGLairClient
     /// <inheritdoc />
     public async Task<IEnumerable<DeviceProperty>> GetAllDevicePropertiesAsync(CancellationToken cancellationToken = default)
     {
-        await LoginAsync(cancellationToken);
-
         if (string.IsNullOrEmpty(_settings.DeviceDsn))
         {
             throw new InvalidOperationException("Device DSN must be configured");
         }
 
         var endpoint = string.Format(DevicePropertiesEndpoint, _settings.DeviceDsn);
-        var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+        var response = await ExecuteRequestWithRetryAsync(
+            () => _httpClient.GetAsync(endpoint, cancellationToken),
+            cancellationToken);
+        
         response.EnsureSuccessStatusCode();
 
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
