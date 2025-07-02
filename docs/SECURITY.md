@@ -92,17 +92,20 @@ If credentials are exposed:
 ### Authentication Security
 
 #### Token Management
-- **Automatic Refresh**: Tokens refreshed before expiration
-- **Secure Storage**: Tokens stored in memory only
-- **Session Timeout**: Handles session expiration gracefully
-- **No Token Logging**: Authentication tokens never logged
+- **Automatic Refresh**: Tokens refreshed automatically before expiration (5-minute buffer)
+- **Refresh Token Support**: Uses refresh tokens when available to avoid re-authentication
+- **Secure Storage**: Tokens stored in memory only, never persisted to disk
+- **Session Timeout**: Handles session expiration gracefully with automatic retry
+- **401 Error Recovery**: Automatically detects and recovers from authentication failures
+- **Token Cleanup**: Clears stale tokens on authentication errors
+- **No Token Logging**: Authentication tokens never logged for security
 
 #### API Security Headers
 ```csharp
 // Automatically applied by the application
 headers.Add("User-Agent", "FGLairControl/1.0");
 headers.Add("X-API-Version", "1.0");
-headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+headers.Authorization = new AuthenticationHeaderValue("auth_token", token);
 ```
 
 ### Network Security
@@ -120,6 +123,32 @@ headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 // 2. Request size limits
 // 3. Rate limiting respect
 // 4. Connection pooling security
+```
+
+#### Authentication Flow
+The application implements a robust authentication flow that handles token expiration automatically:
+
+```csharp
+// Authentication flow implementation:
+// 1. Check if current token is valid (5-minute expiration buffer)
+// 2. If expired, attempt refresh using refresh token
+// 3. If refresh fails or no refresh token, perform fresh login
+// 4. All API calls automatically retry on 401 Unauthorized errors
+// 5. Clear stale tokens and retry with fresh authentication on failure
+
+public async Task LoginAsync(CancellationToken cancellationToken = default)
+{
+    if (!IsTokenExpiredOrExpiring())
+        return; // Use existing valid token
+    
+    if (!string.IsNullOrEmpty(_refreshToken))
+    {
+        if (await TryRefreshTokenAsync(cancellationToken))
+            return; // Successfully refreshed
+    }
+    
+    await PerformFreshLoginAsync(cancellationToken); // Fresh login
+}
 ```
 
 ### Input Validation
