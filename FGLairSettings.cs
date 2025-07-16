@@ -41,14 +41,10 @@ public class FGLairSettings
     public int Interval { get; set; } = 20;
 
     /// <summary>
-    /// Latitude for weather location (required for weather-based temperature control)
+    /// City name for weather location (required for weather-based temperature control)
+    /// Examples: "New York", "London", "Tokyo"
     /// </summary>
-    public double WeatherLatitude { get; set; } = 0;
-
-    /// <summary>
-    /// Longitude for weather location (required for weather-based temperature control)
-    /// </summary>
-    public double WeatherLongitude { get; set; } = 0;
+    public string WeatherCity { get; set; } = string.Empty;
 
     /// <summary>
     /// Enable automatic temperature adjustment based on outside temperature

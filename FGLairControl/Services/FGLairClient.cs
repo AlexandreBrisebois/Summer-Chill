@@ -27,6 +27,9 @@ public class FGLairClient : IFGLairClient
     private const string DevicePropertiesEndpoint = "/apiv1/dsns/{0}/properties";
     private const string SetPropertyEndpoint = "/apiv1/dsns/{0}/properties/{1}/datapoints";
     
+    // Default temperature in case current temperature cannot be retrieved
+    private const double DefaultTemperature = 22.0;
+    
     public FGLairClient(
         HttpClient httpClient,
         IOptions<FGLairSettings> settings,
