@@ -157,9 +157,7 @@ public class Worker : BackgroundService
         {
             var currentTemp = await _fgLairClient.GetTemperatureAsync(cancellationToken);
             
-            _logger.LogInformation("Current temperature setting: {Temperature}°C", currentTemp);
-
-            _logger.LogInformation("Current Temperature Setting: {Temperature}°C at {Timestamp}", currentTemp, DateTimeOffset.Now);
+            _logger.LogInformation("Current temperature setting: {Temperature}°C at {Timestamp}", currentTemp, DateTimeOffset.Now);
         }
         catch (Exception ex)
         {
