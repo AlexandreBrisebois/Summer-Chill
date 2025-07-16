@@ -457,7 +457,7 @@ public class FGLairClient : IFGLairClient
         {
             datapoint = new
             {
-                value = temperatureCelsius.ToString("F1")
+                value = temperatureCelsius
             }
         };
 
