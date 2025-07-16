@@ -6,7 +6,9 @@ public class Worker : BackgroundService
 {
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
+    private readonly IWeatherService _weatherService;
     private readonly int _intervalMinutes;
+    private readonly bool _enableWeatherControl;
 
     // Use a list of positions for flexibility
     private readonly List<string> _louverPositions;
@@ -15,13 +17,18 @@ public class Worker : BackgroundService
     public Worker(
         ILogger<Worker> logger,
         IFGLairClient fgLairClient,
+        IWeatherService weatherService,
         IConfiguration configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
+        _weatherService = weatherService ?? throw new ArgumentNullException(nameof(weatherService));
 
         // Read interval from configuration
         _intervalMinutes = configuration.GetSection("FGLair:Interval").Get<int?>() ?? 20;
+
+        // Read weather control setting
+        _enableWeatherControl = configuration.GetSection("FGLair:EnableWeatherControl").Get<bool?>() ?? true;
 
         // Read louver positions from configuration (comma-separated string)
         var positions = configuration.GetSection("FGLair:LouverPositions").Get<string>() ?? "7,8";
@@ -34,6 +41,11 @@ public class Worker : BackgroundService
     {
         _logger.LogInformation("FGLair Control Worker started at: {time}", DateTimeOffset.Now);
         _logger.LogInformation("Louver will cycle between positions {Positions} every {Interval} minutes", string.Join(", ", _louverPositions), _intervalMinutes);
+        
+        if (_enableWeatherControl)
+        {
+            _logger.LogInformation("Weather-based temperature control is enabled");
+        }
 
         try
         {
@@ -43,6 +55,15 @@ public class Worker : BackgroundService
 
             // Check current louver position
             await CheckCurrentLouverPositionAsync(stoppingToken);
+
+            // Check current temperature setting
+            await CheckCurrentTemperatureAsync(stoppingToken);
+
+            // Perform initial weather check and temperature adjustment if enabled
+            if (_enableWeatherControl)
+            {
+                await CheckWeatherAndAdjustTemperatureAsync(stoppingToken);
+            }
 
             // Send initial louver command (start with position 7)
             await SendCyclingLouverCommandAsync(stoppingToken);
@@ -114,6 +135,12 @@ public class Worker : BackgroundService
                 // Check current position
                 await CheckCurrentLouverPositionAsync(stoppingToken);
                 
+                // Check weather and adjust temperature if enabled
+                if (_enableWeatherControl)
+                {
+                    await CheckWeatherAndAdjustTemperatureAsync(stoppingToken);
+                }
+                
                 // Send cycling command
                 await SendCyclingLouverCommandAsync(stoppingToken);
             }
@@ -121,6 +148,77 @@ public class Worker : BackgroundService
             {
                 _logger.LogError(ex, "Error during periodic louver cycling execution");
             }
+        }
+    }
+
+    private async Task CheckCurrentTemperatureAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var currentTemp = await _fgLairClient.GetTemperatureAsync(cancellationToken);
+            
+            _logger.LogInformation("Current temperature setting: {Temperature}°C", currentTemp);
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Current Temperature Setting: {currentTemp}°C");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check current temperature setting");
+        }
+    }
+
+    private async Task CheckWeatherAndAdjustTemperatureAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get current weather
+            var weather = await _weatherService.GetCurrentWeatherAsync(cancellationToken);
+            var outsideTemp = weather.TemperatureCelsius;
+
+            _logger.LogInformation("Current outside temperature: {Temperature}°C", outsideTemp);
+
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Outside Temperature: {outsideTemp}°C");
+            Console.ResetColor();
+
+            // Apply temperature control logic when outside temp >= 30°C
+            if (outsideTemp >= 30.0)
+            {
+                // Heat pump should be set to at most 10°C cooler than outside temperature
+                var maxHeatPumpTemp = outsideTemp - 10.0;
+                
+                // Get current heat pump temperature setting
+                var currentTemp = await _fgLairClient.GetTemperatureAsync(cancellationToken);
+                
+                if (currentTemp < maxHeatPumpTemp)
+                {
+                    // Current setting is too low (too cold), adjust upward
+                    await _fgLairClient.SetTemperatureAsync(maxHeatPumpTemp, cancellationToken);
+                    
+                    _logger.LogInformation("Temperature adjusted from {OldTemp}°C to {NewTemp}°C due to high outside temperature ({OutsideTemp}°C)", 
+                        currentTemp, maxHeatPumpTemp, outsideTemp);
+
+                    Console.ForegroundColor = ConsoleColor.Magenta;
+                    Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Temperature Adjusted: {currentTemp}°C → {maxHeatPumpTemp}°C (Outside: {outsideTemp}°C)");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    _logger.LogInformation("Temperature setting {CurrentTemp}°C is appropriate for outside temperature {OutsideTemp}°C", 
+                        currentTemp, outsideTemp);
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Outside temperature {OutsideTemp}°C is below 30°C threshold, no temperature adjustment needed", 
+                    outsideTemp);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check weather and adjust temperature");
         }
     }
 

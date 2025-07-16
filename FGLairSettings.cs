@@ -39,4 +39,19 @@ public class FGLairSettings
     /// Interval in minutes between louver position changes
     /// </summary>
     public int Interval { get; set; } = 20;
+
+    /// <summary>
+    /// Latitude for weather location (required for weather-based temperature control)
+    /// </summary>
+    public double WeatherLatitude { get; set; } = 0;
+
+    /// <summary>
+    /// Longitude for weather location (required for weather-based temperature control)
+    /// </summary>
+    public double WeatherLongitude { get; set; } = 0;
+
+    /// <summary>
+    /// Enable automatic temperature adjustment based on outside temperature
+    /// </summary>
+    public bool EnableWeatherControl { get; set; } = true;
 }

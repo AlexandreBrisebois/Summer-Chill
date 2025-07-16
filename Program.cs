@@ -14,6 +14,9 @@ var builder = Host.CreateApplicationBuilder(args);
 // Register HttpClient for FGLair API
 builder.Services.AddHttpClient<IFGLairClient, FGLairClient>();
 
+// Register HttpClient for Weather API
+builder.Services.AddHttpClient<IWeatherService, WeatherService>();
+
 // Configure FGLair settings from appsettings.json
 builder.Services.Configure<FGLairSettings>(
     builder.Configuration.GetSection("FGLair"));
