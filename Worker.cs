@@ -175,9 +175,7 @@ public class Worker : BackgroundService
 
             _logger.LogInformation("Current outside temperature: {Temperature}°C", outsideTemp);
 
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Outside Temperature: {outsideTemp}°C");
-            Console.ResetColor();
+            _logger.LogInformation("Outside Temperature: {OutsideTemp}°C at {Timestamp}", outsideTemp, DateTimeOffset.Now);
 
             // Apply temperature control logic when outside temp >= 30°C
             if (outsideTemp >= 30.0)
