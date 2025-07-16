@@ -426,7 +426,7 @@ public class FGLairClient : IFGLairClient
         }
 
         _logger.LogWarning("Temperature setting property not found");
-        return 22.0; // Default temperature
+        return DefaultTemperature; // Default temperature
     }
 
     /// <inheritdoc />
