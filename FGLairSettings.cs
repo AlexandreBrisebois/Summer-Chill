@@ -41,6 +41,12 @@ public class FGLairSettings
     public int Interval { get; set; } = 20;
 
     /// <summary>
+    /// Comma-separated list of louver positions to cycle through
+    /// Default: "7,8"
+    /// </summary>
+    public string LouverPositions { get; set; } = "7,8";
+
+    /// <summary>
     /// City name for weather location (required for weather-based temperature control)
     /// Examples: "New York", "London", "Tokyo"
     /// </summary>

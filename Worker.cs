@@ -1,4 +1,5 @@
 using FGLairControl.Services;
+using Microsoft.Extensions.Options;
 
 namespace FGLairControl;
 
@@ -7,6 +8,7 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
     private readonly IWeatherService _weatherService;
+    private readonly FGLairSettings _settings;
     private readonly int _intervalMinutes;
     private readonly bool _enableWeatherControl;
 
@@ -18,20 +20,21 @@ public class Worker : BackgroundService
         ILogger<Worker> logger,
         IFGLairClient fgLairClient,
         IWeatherService weatherService,
-        IConfiguration configuration)
+        IOptions<FGLairSettings> settings)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
         _weatherService = weatherService ?? throw new ArgumentNullException(nameof(weatherService));
+        _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
 
-        // Read interval from configuration
-        _intervalMinutes = configuration.GetSection("FGLair:Interval").Get<int?>() ?? 20;
+        // Read interval from settings
+        _intervalMinutes = _settings.Interval;
 
         // Read weather control setting
-        _enableWeatherControl = configuration.GetSection("FGLair:EnableWeatherControl").Get<bool?>() ?? true;
+        _enableWeatherControl = _settings.EnableWeatherControl;
 
-        // Read louver positions from configuration (comma-separated string)
-        var positions = configuration.GetSection("FGLair:LouverPositions").Get<string>() ?? "7,8";
+        // Read louver positions from settings (comma-separated string)
+        var positions = _settings.LouverPositions;
         _louverPositions = positions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         if (_louverPositions.Count == 0)
             throw new InvalidOperationException("No louver positions configured.");
