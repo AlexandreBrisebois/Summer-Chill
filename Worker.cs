@@ -216,6 +216,14 @@ public class Worker : BackgroundService
                     outsideTemp);
             }
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Weather location"))
+        {
+            _logger.LogWarning("Weather location not configured - skipping weather-based temperature control. Set WeatherLatitude and WeatherLongitude in configuration.");
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("network") || ex.Message.Contains("Unable to retrieve weather"))
+        {
+            _logger.LogWarning("Weather service unavailable - skipping temperature adjustment this cycle. Error: {Error}", ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to check weather and adjust temperature");

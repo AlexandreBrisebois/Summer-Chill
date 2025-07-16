@@ -72,8 +72,13 @@ public class WeatherService : IWeatherService
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Failed to fetch weather data from Open-Meteo API");
-            throw new InvalidOperationException("Unable to retrieve weather data", ex);
+            _logger.LogWarning(ex, "Failed to fetch weather data from Open-Meteo API - network may be unavailable");
+            throw new InvalidOperationException("Unable to retrieve weather data - check network connection", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Weather API request timed out");
+            throw new InvalidOperationException("Weather API request timed out", ex);
         }
         catch (JsonException ex)
         {
