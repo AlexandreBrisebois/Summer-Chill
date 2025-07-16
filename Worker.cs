@@ -210,9 +210,9 @@ public class Worker : BackgroundService
                     outsideTemp);
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("Weather location"))
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Weather city must be configured"))
         {
-            _logger.LogWarning("Weather location not configured - skipping weather-based temperature control. Set WeatherLatitude and WeatherLongitude in configuration.");
+            _logger.LogWarning("Weather city not configured - skipping weather-based temperature control. Set WeatherCity in configuration.");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("network") || ex.Message.Contains("Unable to retrieve weather"))
         {
