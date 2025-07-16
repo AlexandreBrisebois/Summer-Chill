@@ -159,9 +159,7 @@ public class Worker : BackgroundService
             
             _logger.LogInformation("Current temperature setting: {Temperature}°C", currentTemp);
 
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Current Temperature Setting: {currentTemp}°C");
-            Console.ResetColor();
+            _logger.LogInformation("Current Temperature Setting: {Temperature}°C at {Timestamp}", currentTemp, DateTimeOffset.Now);
         }
         catch (Exception ex)
         {
