@@ -173,8 +173,6 @@ public class Worker : BackgroundService
             var weather = await _weatherService.GetCurrentWeatherAsync(cancellationToken);
             var outsideTemp = weather.TemperatureCelsius;
 
-            _logger.LogInformation("Current outside temperature: {Temperature}°C", outsideTemp);
-
             _logger.LogInformation("Outside Temperature: {OutsideTemp}°C at {Timestamp}", outsideTemp, DateTimeOffset.Now);
 
             // Apply temperature control logic when outside temp >= 30°C
