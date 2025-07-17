@@ -429,7 +429,7 @@ public class FGLairClient : IFGLairClient
         }
 
         _logger.LogWarning("Temperature setting property not found");
-        return DefaultTemperature; // Default temperature
+        throw new InvalidOperationException("Temperature setting property not found");
     }
 
     /// <inheritdoc />
