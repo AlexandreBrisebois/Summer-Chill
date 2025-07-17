@@ -43,18 +43,16 @@ public class WeatherService : IWeatherService
     /// <inheritdoc />
     public async Task<WeatherData> GetCurrentWeatherAsync(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings.WeatherCity))
+        if (!_settings.Latitude.HasValue || !_settings.Longitude.HasValue)
         {
-            throw new InvalidOperationException("Weather city must be configured");
+            throw new InvalidOperationException("Latitude and longitude must be configured");
         }
 
-        var coordinates = await GetCoordinatesAsync(_settings.WeatherCity, cancellationToken);
-        
-        _logger.LogInformation("Fetching weather data for {City} at coordinates: {Latitude}, {Longitude}", 
-            _settings.WeatherCity, coordinates.Latitude, coordinates.Longitude);
+        _logger.LogInformation("Fetching weather data for coordinates: {Latitude}, {Longitude}", 
+            _settings.Latitude, _settings.Longitude);
 
         // Build Open-Meteo API URL with current weather parameters
-        var url = $"{WeatherBaseUrl}?latitude={coordinates.Latitude:F4}&longitude={coordinates.Longitude:F4}&current=temperature_2m&timezone=auto";
+        var url = $"{WeatherBaseUrl}?latitude={_settings.Latitude:F4}&longitude={_settings.Longitude:F4}&current=temperature_2m&timezone=auto";
 
         try
         {
