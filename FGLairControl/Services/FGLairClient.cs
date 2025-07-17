@@ -27,6 +27,9 @@ public class FGLairClient : IFGLairClient
     private const string DevicePropertiesEndpoint = "/apiv1/dsns/{0}/properties";
     private const string SetPropertyEndpoint = "/apiv1/dsns/{0}/properties/{1}/datapoints";
     
+    // Default temperature in case current temperature cannot be retrieved
+    private const double DefaultTemperature = 22.0;
+    
     public FGLairClient(
         HttpClient httpClient,
         IOptions<FGLairSettings> settings,
@@ -375,5 +378,124 @@ public class FGLairClient : IFGLairClient
 
         _logger.LogInformation("Retrieved {Count} device properties", properties.Count);
         return properties;
+    }
+
+    /// <inheritdoc />
+    public async Task<double> GetTemperatureAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(_settings.DeviceDsn))
+        {
+            throw new InvalidOperationException("Device DSN must be configured");
+        }
+
+        // Get device properties to find temperature setting
+        var endpoint = string.Format(DevicePropertiesEndpoint, _settings.DeviceDsn);
+        var response = await ExecuteRequestWithRetryAsync(
+            () => _httpClient.GetAsync(endpoint, cancellationToken),
+            cancellationToken);
+        
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+
+        // Parse the properties array to find temperature setting
+        // Common property names: af_temp_setting, temp_setting, set_temp, target_temp
+        var temperaturePropertyNames = new[] { "af_temp_setting", "temp_setting", "set_temp", "target_temp" };
+
+        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var propertyElement in doc.RootElement.EnumerateArray())
+            {
+                if (propertyElement.TryGetProperty("property", out var propObj) &&
+                    propObj.TryGetProperty("name", out var nameElement))
+                {
+                    var propertyName = nameElement.GetString() ?? "";
+                    if (temperaturePropertyNames.Contains(propertyName) &&
+                        propObj.TryGetProperty("value", out var valueElement))
+                    {
+                        var temperature = valueElement.ValueKind switch
+                        {
+                            JsonValueKind.String when double.TryParse(valueElement.GetString(), out var strTemp) => strTemp,
+                            JsonValueKind.Number => valueElement.GetDouble(),
+                            _ => 0.0
+                        };
+                        
+                        _logger.LogInformation("Current temperature setting ({PropertyName}): {Temperature}°C", propertyName, temperature);
+                        return temperature;
+                    }
+                }
+            }
+        }
+
+        _logger.LogWarning("Temperature setting property not found");
+        throw new InvalidOperationException("Temperature setting property not found");
+    }
+
+    /// <inheritdoc />
+    public async Task SetTemperatureAsync(double temperatureCelsius, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(_settings.DeviceDsn))
+        {
+            throw new InvalidOperationException("Device DSN must be configured");
+        }
+
+        // Validate temperature range (typical range for heat pumps)
+        if (temperatureCelsius < MinTemperatureCelsius || temperatureCelsius > MaxTemperatureCelsius)
+        {
+            throw new ArgumentOutOfRangeException(nameof(temperatureCelsius), 
+                $"Temperature must be between {MinTemperatureCelsius}°C and {MaxTemperatureCelsius}°C");
+        }
+
+        _logger.LogInformation("Setting temperature to {Temperature}°C for device {DeviceDsn}", 
+            temperatureCelsius, _settings.DeviceDsn);
+
+        // Try the most common temperature property name first (af_temp_setting)
+        var propertyName = "af_temp_setting";
+        var endpoint = string.Format(SetPropertyEndpoint, _settings.DeviceDsn, propertyName);
+        var request = new
+        {
+            datapoint = new
+            {
+                value = temperatureCelsius
+            }
+        };
+
+        try
+        {
+            var response = await ExecuteRequestWithRetryAsync(
+                () => _httpClient.PostAsJsonAsync(endpoint, request, _jsonOptions, cancellationToken),
+                cancellationToken);
+            
+            response.EnsureSuccessStatusCode();
+            _logger.LogInformation("Temperature set successfully to {Temperature}°C", temperatureCelsius);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Failed to set temperature using property {PropertyName}, will attempt with alternate property names", propertyName);
+            
+            // Try alternative property names
+            var alternateNames = new[] { "temp_setting", "set_temp", "target_temp" };
+            foreach (var altName in alternateNames)
+            {
+                try
+                {
+                    var altEndpoint = string.Format(SetPropertyEndpoint, _settings.DeviceDsn, altName);
+                    var altResponse = await ExecuteRequestWithRetryAsync(
+                        () => _httpClient.PostAsJsonAsync(altEndpoint, request, _jsonOptions, cancellationToken),
+                        cancellationToken);
+                    
+                    altResponse.EnsureSuccessStatusCode();
+                    _logger.LogInformation("Temperature set successfully to {Temperature}°C using property {PropertyName}", temperatureCelsius, altName);
+                    return;
+                }
+                catch (HttpRequestException)
+                {
+                    _logger.LogDebug("Failed to set temperature using property {PropertyName}", altName);
+                }
+            }
+            
+            throw new InvalidOperationException("Unable to set temperature - no valid temperature property found", ex);
+        }
     }
 }

@@ -1,13 +1,22 @@
 # FGLair Control
 
-A .NET Worker Service that automatically controls Fujitsu General air conditioner louver positions. The service cycles between positions 7 and 8 every 20 minutes for better air distribution.
+A .NET Worker Service that automatically controls Fujitsu General air conditioner louver positions and dynamically adjusts temperature based on outside weather conditions. The service cycles between louver positions every 20 minutes for better air distribution and automatically manages heat pump temperature during hot weather.
+
+## Features
+
+- **Automatic Louver Control**: Cycles between configured positions (default: 7,8) every 20 minutes
+- **Weather-Based Temperature Control**: Dynamically adjusts heat pump temperature based on outside temperature
+- **Smart Heat Management**: When outside temperature ≥ 30°C, ensures heat pump is not set more than 10°C cooler than outside temperature
+- **Free Weather API**: Uses Open-Meteo API (no subscription required)
+- **Configurable**: Easy to customize intervals, positions, and weather location
 
 ## Quick Start
 
 ### Prerequisites
-- .NET 9 SDK
+- .NET 8+ SDK
 - FGLair account credentials  
 - Device DSN from FGLair mobile app
+- Location coordinates (latitude/longitude) for weather data
 
 ### Setup
 ```bash
@@ -16,7 +25,7 @@ git clone <repository-url>
 cd Summer-Chill
 cp appsettings.template.json appsettings.json
 
-# Edit appsettings.json with your credentials
+# Edit appsettings.json with your credentials and location
 dotnet run
 ```
 
@@ -28,16 +37,27 @@ docker-compose up -d
 
 ## Configuration
 
-Add your FGLair credentials to `appsettings.json`:
+Add your FGLair credentials and weather location to `appsettings.json`:
 ```json
 {
   "FGLair": {
     "Username": "your-email@example.com",
     "Password": "your-password",
-    "DeviceDsn": "DSXXXXXXXXXXXXXXXX"
+    "DeviceDsn": "DSXXXXXXXXXXXXXXXX",
+    "LouverPositions": "7,8",
+    "Interval": 20,
+    "WeatherLatitude": 40.7128,
+    "WeatherLongitude": -74.0060,
+    "EnableWeatherControl": true
   }
 }
 ```
+
+### Weather Configuration
+
+- **WeatherLatitude/WeatherLongitude**: Your location coordinates for weather data
+- **EnableWeatherControl**: Set to `false` to disable weather-based temperature control
+- Find your coordinates: Use any online coordinate finder or GPS app
 
 **Finding your DSN**: Open FGLair app → Device Settings → Device Information
 
