@@ -441,10 +441,10 @@ public class FGLairClient : IFGLairClient
         }
 
         // Validate temperature range (typical range for heat pumps)
-        if (temperatureCelsius < 16 || temperatureCelsius > 30)
+        if (temperatureCelsius < MinTemperatureCelsius || temperatureCelsius > MaxTemperatureCelsius)
         {
             throw new ArgumentOutOfRangeException(nameof(temperatureCelsius), 
-                "Temperature must be between 16°C and 30°C");
+                $"Temperature must be between {MinTemperatureCelsius}°C and {MaxTemperatureCelsius}°C");
         }
 
         _logger.LogInformation("Setting temperature to {Temperature}°C for device {DeviceDsn}", 
