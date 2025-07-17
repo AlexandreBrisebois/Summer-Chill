@@ -35,6 +35,8 @@ public class Worker : BackgroundService
 
         // Read louver positions from settings (comma-separated string)
         var positions = _settings.LouverPositions;
+        if (positions == null)
+            throw new InvalidOperationException("Louver positions are not configured.");
         _louverPositions = positions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         if (_louverPositions.Count == 0)
             throw new InvalidOperationException("No louver positions configured.");
