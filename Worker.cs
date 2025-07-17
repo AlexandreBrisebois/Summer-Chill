@@ -197,9 +197,8 @@ public class Worker : BackgroundService
                     _logger.LogInformation("Temperature adjusted from {OldTemp}°C to {NewTemp}°C due to high outside temperature ({OutsideTemp}°C)", 
                         currentTemp, maxHeatPumpTemp, outsideTemp);
 
-                    Console.ForegroundColor = ConsoleColor.Magenta;
-                    Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Temperature Adjusted: {currentTemp}°C → {maxHeatPumpTemp}°C (Outside: {outsideTemp}°C)");
-                    Console.ResetColor();
+                    _logger.LogInformation("Temperature Adjusted: {OldTemp}°C → {NewTemp}°C (Outside: {OutsideTemp}°C) at {Timestamp}", 
+                        currentTemp, maxHeatPumpTemp, outsideTemp, DateTimeOffset.Now);
                 }
                 else
                 {
