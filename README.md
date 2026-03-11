@@ -13,7 +13,7 @@ A .NET Worker Service that automatically controls Fujitsu General air conditione
 ## Quick Start
 
 ### Prerequisites
-- .NET 8+ SDK
+- .NET 10 SDK
 - FGLair account credentials  
 - Device DSN from FGLair mobile app
 - Location coordinates (latitude/longitude) for weather data

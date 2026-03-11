@@ -10,7 +10,6 @@ public class DeviceInfo
     /// <summary>
     /// The device ID (legacy - use Dsn instead)
     /// </summary>
-    [Obsolete("Use DeviceDsn (Dsn property) instead for all device operations")]
     public string DeviceId { get; set; } = string.Empty;
 
     /// <summary>

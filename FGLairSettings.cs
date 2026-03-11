@@ -41,8 +41,7 @@ public class FGLairSettings
     public int Interval { get; set; } = 20;
 
     /// <summary>
-    /// Comma-separated list of louver positions to cycle through
-    /// Default: "7,8"
+    /// Comma-separated list of louver positions to cycle through (e.g. "7,8")
     /// </summary>
     public string LouverPositions { get; set; } = "7,8";
 
