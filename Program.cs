@@ -1,15 +1,16 @@
 using FGLairControl;
 using FGLairControl.Services;
 
-// Check if debug mode is requested
+var builder = Host.CreateApplicationBuilder(args);
+
+// Check if debug mode is requested - done after builder so configuration (appsettings, user secrets) is available
 if (args.Length > 0 && args[0].Equals("--debug", StringComparison.OrdinalIgnoreCase))
 {
     Console.WriteLine("Running in debug mode...");
-    await FGLairDebugger.DebugApiAsync();
+    var debugSettings = builder.Configuration.GetSection("FGLair").Get<FGLairSettings>() ?? new FGLairSettings();
+    await FGLairDebugger.DebugApiAsync(debugSettings);
     return;
 }
-
-var builder = Host.CreateApplicationBuilder(args);
 
 // Register HttpClient for FGLair API
 builder.Services.AddHttpClient<IFGLairClient, FGLairClient>();
