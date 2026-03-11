@@ -1,31 +1,33 @@
 using FGLairControl.Services;
+using Microsoft.Extensions.Options;
 
 namespace FGLairControl;
 
 public class Worker : BackgroundService
 {
+    private const int RetryDelayMinutes = 1;
+
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
     private readonly int _intervalMinutes;
 
-    // Use a list of positions for flexibility
-    private readonly List<string> _louverPositions;
+    private readonly IReadOnlyList<string> _louverPositions;
     private int _currentPositionIndex = 0;
 
     public Worker(
         ILogger<Worker> logger,
         IFGLairClient fgLairClient,
-        IConfiguration configuration)
+        IOptions<FGLairSettings> settings)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
+        ArgumentNullException.ThrowIfNull(settings);
 
-        // Read interval from configuration
-        _intervalMinutes = configuration.GetSection("FGLair:Interval").Get<int?>() ?? 20;
+        var options = settings.Value;
+        _intervalMinutes = options.Interval;
 
-        // Read louver positions from configuration (comma-separated string)
-        var positions = configuration.GetSection("FGLair:LouverPositions").Get<string>() ?? "7,8";
-        _louverPositions = positions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        var raw = string.IsNullOrWhiteSpace(options.LouverPositions) ? "7,8" : options.LouverPositions;
+        _louverPositions = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (_louverPositions.Count == 0)
             throw new InvalidOperationException("No louver positions configured.");
     }
@@ -33,26 +35,40 @@ public class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FGLair Control Worker started at: {time}", DateTimeOffset.Now);
-        _logger.LogInformation("Louver will cycle between positions {Positions} every {Interval} minutes", string.Join(", ", _louverPositions), _intervalMinutes);
+        _logger.LogInformation("Louver will cycle between positions {Positions} every {Interval} minutes",
+            string.Join(", ", _louverPositions), _intervalMinutes);
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            // Authenticate with the API
-            await _fgLairClient.LoginAsync(stoppingToken);
-            _logger.LogInformation("Successfully authenticated with FGLair API");
+            try
+            {
+                await _fgLairClient.LoginAsync(stoppingToken);
+                _logger.LogInformation("Authenticated with FGLair API");
 
-            // Check current louver position
-            await CheckCurrentLouverPositionAsync(stoppingToken);
+                await CheckCurrentLouverPositionAsync(stoppingToken);
+                await SendCyclingLouverCommandAsync(stoppingToken);
+                await RunPeriodicCommandsAsync(stoppingToken);
 
-            // Send initial louver command (start with position 7)
-            await SendCyclingLouverCommandAsync(stoppingToken);
+                // RunPeriodicCommandsAsync only exits on clean cancellation
+                return;
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Worker encountered an error, retrying in {Delay} minute(s)", RetryDelayMinutes);
+            }
 
-            // Setup periodic command sending every 20 minutes
-            await RunPeriodicCommandsAsync(stoppingToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in worker execution");
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(RetryDelayMinutes), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
@@ -61,14 +77,8 @@ public class Worker : BackgroundService
         try
         {
             var currentPosition = await _fgLairClient.GetLouverPositionAsync(cancellationToken);
-            var positionDescription = GetPositionDescription(currentPosition);
-            
-            _logger.LogInformation("Current louver position: {Position} ({Description})", 
-                currentPosition, positionDescription);
-
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Current Louver Position: {currentPosition} ({positionDescription})");
-            Console.ResetColor();
+            _logger.LogInformation("Current louver position: {Position} ({Description})",
+                currentPosition, GetPositionDescription(currentPosition));
         }
         catch (Exception ex)
         {
@@ -80,51 +90,42 @@ public class Worker : BackgroundService
     {
         try
         {
-            var currentPosition = _louverPositions[_currentPositionIndex];
-            await _fgLairClient.SendLouverCommandAsync(currentPosition, cancellationToken);
-            
-            var targetDescription = GetPositionDescription(currentPosition);
-            _logger.LogInformation("Cycling louver command sent. Position: {Position} ({Description})", 
-                currentPosition, targetDescription);
+            var position = _louverPositions[_currentPositionIndex];
+            await _fgLairClient.SendLouverCommandAsync(position, cancellationToken);
 
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] Cycling Louver Command Sent: {currentPosition} ({targetDescription})");
-            Console.ResetColor();
+            _logger.LogInformation("Louver command sent. Position: {Position} ({Description})",
+                position, GetPositionDescription(position));
 
-            // Move to next position for the next cycle
             _currentPositionIndex = (_currentPositionIndex + 1) % _louverPositions.Count;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send cycling louver command");
+            _logger.LogError(ex, "Failed to send louver command");
         }
     }
 
     private async Task RunPeriodicCommandsAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_intervalMinutes)); // Use configured interval
-        
-        _logger.LogInformation("Starting periodic louver cycling every {Interval} minutes between positions {PositionA} and {PositionB}", 
-            _intervalMinutes, _louverPositions[0], _louverPositions[1]);
-        
-        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+        _logger.LogInformation("Starting periodic louver cycling every {Interval} minutes between positions {Positions}",
+            _intervalMinutes, string.Join(", ", _louverPositions));
+
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_intervalMinutes));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                // Check current position
                 await CheckCurrentLouverPositionAsync(stoppingToken);
-                
-                // Send cycling command
                 await SendCyclingLouverCommandAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during periodic louver cycling execution");
+                _logger.LogError(ex, "Error during periodic louver cycling");
             }
         }
     }
 
-    private string GetPositionDescription(string position) => position switch
+    private static string GetPositionDescription(string position) => position switch
     {
         "0" => "Auto",
         "1" => "Position 1 (highest)",
@@ -133,9 +134,9 @@ public class Worker : BackgroundService
         "4" => "Position 4",
         "5" => "Position 5 (lowest/down)",
         "6" => "Position 6",
-        "7" => "Position 7 (cycling position A)",
-        "8" => "Position 8 (cycling position B)",
-        _ => "Unknown Position"
+        "7" => "Position 7",
+        "8" => "Position 8",
+        _ => "Unknown"
     };
 
     public override async Task StopAsync(CancellationToken cancellationToken)

@@ -175,7 +175,7 @@ public async Task LoginAsync(CancellationToken cancellationToken = default)
 #### Base Image Selection
 ```dockerfile
 # Use official Microsoft images
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled
 
 # Security benefits:
 # - Regular security updates

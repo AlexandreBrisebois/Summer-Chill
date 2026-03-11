@@ -84,19 +84,19 @@ public class FGLairClient : IFGLairClient
         _logger.LogInformation("Logging into FGLair API with username {Username}", _settings.Username);
 
         // Create login request exactly as shown in rest.http
-        var loginRequest = new
-        {
-            user = new
+            var loginRequest = new LoginRequest
             {
-                email = _settings.Username,
-                password = _settings.Password,
-                application = new
+                User = new UserCredentials
                 {
-                    app_id = FGLairSettings.AppId,
-                    app_secret = FGLairSettings.AppSecret
+                    Email = _settings.Username,
+                    Password = _settings.Password,
+                    Application = new AppDetails
+                    {
+                        AppId = FGLairSettings.AppId,
+                        AppSecret = FGLairSettings.AppSecret
+                    }
                 }
-            }
-        };
+            };
 
         var response = await _httpClient.PostAsJsonAsync(LoginEndpoint, loginRequest, _jsonOptions, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -112,13 +112,10 @@ public class FGLairClient : IFGLairClient
     {
         try
         {
-            var refreshRequest = new
-            {
-                user = new
+                var refreshRequest = new RefreshTokenRequest
                 {
-                    refresh_token = _refreshToken
-                }
-            };
+                    User = new RefreshCredentials { RefreshToken = _refreshToken }
+                };
 
             var response = await _httpClient.PostAsJsonAsync(RefreshEndpoint, refreshRequest, _jsonOptions, cancellationToken);
             
@@ -263,13 +260,10 @@ public class FGLairClient : IFGLairClient
 
         // Send command exactly as shown in rest.http
         var endpoint = string.Format(SetPropertyEndpoint, _settings.DeviceDsn, "af_vertical_direction");
-        var request = new
-        {
-            datapoint = new
+            var request = new DatapointRequest
             {
-                value = position
-            }
-        };
+                Datapoint = new DatapointData { Value = position }
+            };
 
         var response = await ExecuteRequestWithRetryAsync(
             () => _httpClient.PostAsJsonAsync(endpoint, request, _jsonOptions, cancellationToken),

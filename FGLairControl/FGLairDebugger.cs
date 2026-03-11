@@ -20,14 +20,13 @@ public static class FGLairDebugger
     /// <summary>
     /// Test FGLair API authentication and device property access
     /// </summary>
-    public static async Task DebugApiAsync()
+    public static async Task DebugApiAsync(FGLairSettings settings)
     {
         try
         {
             Console.WriteLine("=== FGLair API Debug Tool ===\n");
             
-            // Configure HttpClient based on rest.http examples
-            _httpClient.BaseAddress = new Uri("https://user-field.aylanetworks.com");
+            _httpClient.BaseAddress = new Uri(FGLairSettings.BaseUrl);
             _httpClient.DefaultRequestHeaders.Accept.Clear();
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             _httpClient.DefaultRequestHeaders.UserAgent.Clear();
@@ -37,7 +36,7 @@ public static class FGLairDebugger
 
             // Step 1: Authenticate
             Console.WriteLine("Step 1: Authenticating...");
-            var accessToken = await AuthenticateAsync();
+            var accessToken = await AuthenticateAsync(settings);
             if (string.IsNullOrEmpty(accessToken))
             {
                 Console.WriteLine("❌ Authentication failed");
@@ -47,7 +46,7 @@ public static class FGLairDebugger
 
             // Step 2: Test device properties
             Console.WriteLine("Step 2: Testing device properties...");
-            await TestDevicePropertiesAsync(accessToken, "AC000W002826905");
+            await TestDevicePropertiesAsync(settings.DeviceDsn);
         }
         catch (Exception ex)
         {
@@ -55,17 +54,16 @@ public static class FGLairDebugger
         }
     }
 
-    private static async Task<string> AuthenticateAsync()
+    private static async Task<string> AuthenticateAsync(FGLairSettings settings)
     {
         try
         {
-            // Use the exact login request from rest.http
             var loginRequest = new
             {
                 user = new
                 {
-                    email = "brisebois@outlook.com",
-                    password = "dt0Iamr6T0",
+                    email = settings.Username,
+                    password = settings.Password,
                     application = new
                     {
                         app_id = FGLairSettings.AppId,
@@ -96,7 +94,7 @@ public static class FGLairDebugger
         }
     }
 
-    private static async Task TestDevicePropertiesAsync(string accessToken, string deviceDsn)
+    private static async Task TestDevicePropertiesAsync(string deviceDsn)
     {
         try
         {

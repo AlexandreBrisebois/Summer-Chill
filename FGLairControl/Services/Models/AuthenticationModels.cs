@@ -79,3 +79,27 @@ public class LoginResponse
     [JsonPropertyName("expires_in")]
     public int ExpiresIn { get; set; }
 }
+
+/// <summary>
+/// Request model for refreshing the token
+/// </summary>
+public class RefreshTokenRequest
+{
+    /// <summary>
+    /// The user credentials for refreshing the token
+    /// </summary>
+    [JsonPropertyName("user")]
+    public RefreshCredentials User { get; set; } = new();
+}
+
+/// <summary>
+/// Credentials required for refreshing the token
+/// </summary>
+public class RefreshCredentials
+{
+    /// <summary>
+    /// The refresh token
+    /// </summary>
+    [JsonPropertyName("refresh_token")]
+    public string RefreshToken { get; set; } = string.Empty;
+}
