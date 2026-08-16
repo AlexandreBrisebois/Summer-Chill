@@ -19,17 +19,14 @@ public class Worker : BackgroundService
     public Worker(
         ILogger<Worker> logger,
         IFGLairClient fgLairClient,
-        IWeatherService weatherService,
         IOptions<FGLairSettings> settings)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fgLairClient = fgLairClient ?? throw new ArgumentNullException(nameof(fgLairClient));
-        _weatherService = weatherService ?? throw new ArgumentNullException(nameof(weatherService));
         ArgumentNullException.ThrowIfNull(settings);
 
         var options = settings.Value;
         _intervalMinutes = options.Interval;
-        _enableWeatherControl = options.EnableWeatherControl;
 
         var raw = string.IsNullOrWhiteSpace(options.LouverPositions) ? "7,8" : options.LouverPositions;
         _louverPositions = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -43,11 +40,6 @@ public class Worker : BackgroundService
         _logger.LogInformation("Louver will cycle between positions {Positions} every {Interval} minutes",
             string.Join(", ", _louverPositions), _intervalMinutes);
 
-        if (_enableWeatherControl)
-        {
-            _logger.LogInformation("Weather-based temperature control is enabled");
-        }
-
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -56,12 +48,6 @@ public class Worker : BackgroundService
                 _logger.LogInformation("Authenticated with FGLair API");
 
                 await CheckCurrentLouverPositionAsync(stoppingToken);
-
-                if (_enableWeatherControl)
-                {
-                    await CheckWeatherAndAdjustTemperatureAsync(stoppingToken);
-                }
-
                 await SendCyclingLouverCommandAsync(stoppingToken);
                 await RunPeriodicCommandsAsync(stoppingToken);
 
@@ -132,51 +118,11 @@ public class Worker : BackgroundService
             try
             {
                 await CheckCurrentLouverPositionAsync(stoppingToken);
-
-                if (_enableWeatherControl)
-                {
-                    await CheckWeatherAndAdjustTemperatureAsync(stoppingToken);
-                }
-
                 await SendCyclingLouverCommandAsync(stoppingToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during periodic louver cycling");
-            }
-        }
-    }
-
-    private async Task CheckWeatherAndAdjustTemperatureAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var weather = await _weatherService.GetCurrentWeatherAsync(cancellationToken);
-            var outsideTemp = weather.TemperatureCelsius;
-
-            _logger.LogInformation("Outside temperature: {OutsideTemp}°C", outsideTemp);
-
-            if (outsideTemp >= 30.0)
-            {
-                var maxHeatPumpTemp = outsideTemp - 10.0;
-                var currentTemp = await _fgLairClient.GetTemperatureAsync(cancellationToken);
-
-                if (currentTemp < maxHeatPumpTemp)
-                {
-                    await _fgLairClient.SetTemperatureAsync(maxHeatPumpTemp, cancellationToken);
-                    _logger.LogInformation("Temperature adjusted from {OldTemp}°C to {NewTemp}°C (outside: {OutsideTemp}°C)",
-                        currentTemp, maxHeatPumpTemp, outsideTemp);
-                }
-                else
-                {
-                    _logger.LogInformation("Temperature setting {CurrentTemp}°C is appropriate for outside temperature {OutsideTemp}°C",
-                        currentTemp, outsideTemp);
-                }
-            }
-            else
-            {
-                _logger.LogInformation("Outside temperature {OutsideTemp}°C is below 30°C threshold, no adjustment needed",
-                    outsideTemp);
             }
         }
         catch (InvalidOperationException ex)
