@@ -9,7 +9,9 @@ public class Worker : BackgroundService
 
     private readonly ILogger<Worker> _logger;
     private readonly IFGLairClient _fgLairClient;
+    private readonly IWeatherService _weatherService;
     private readonly int _intervalMinutes;
+    private readonly bool _enableWeatherControl;
 
     private readonly IReadOnlyList<string> _louverPositions;
     private int _currentPositionIndex = 0;
@@ -122,6 +124,14 @@ public class Worker : BackgroundService
             {
                 _logger.LogError(ex, "Error during periodic louver cycling");
             }
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Weather service unavailable - skipping temperature adjustment this cycle. Error: {Error}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check weather and adjust temperature");
         }
     }
 
