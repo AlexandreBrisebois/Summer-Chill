@@ -1,0 +1,42 @@
+name: Validate dependencies
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: dotnet restore FGLairControl.csproj --locked-mode
+
+      - name: Build application
+        run: dotnet build FGLairControl.csproj --configuration Release --no-restore
+
+      - name: Publish application without running it
+        run: dotnet publish FGLairControl.csproj --configuration Release --no-build --output /tmp/summer-chill-publish
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Build container without publishing or running it
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          push: false
+          pull: true
